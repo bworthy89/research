@@ -66,11 +66,11 @@ class RoadLayoutGenerator {
         const rng = new SeededRandom(seed);
         const canvasSize = this.canvas.width;
 
-        // Helper function to add randomization
+        // Helper function to add small randomization (in pixels, not percentage)
         const randomize = (value) => {
             if (randomization === 0) return value;
-            const variation = (randomization / 100) * value;
-            return value + rng.range(-variation, variation);
+            const maxVariation = 20 * (randomization / 100); // Max 20 pixels at 100%
+            return value + rng.range(-maxVariation, maxVariation);
         };
 
         // Draw vertical roads
@@ -78,11 +78,12 @@ class RoadLayoutGenerator {
             const isArterial = arterialSpacing > 0 && x % arterialSpacing === 0 && x !== 0;
             const roadType = isArterial ? 'ARTERIAL' : 'LOCAL';
 
-            const xPos = randomize(this.metersToPixels(x, size));
+            const xPos = this.metersToPixels(x, size);
+            const xPosRandomized = randomize(xPos);
             const y1 = 0;
             const y2 = canvasSize;
 
-            this.drawRoad(xPos, y1, xPos, y2, roadType);
+            this.drawRoad(xPosRandomized, y1, xPosRandomized, y2, roadType);
         }
 
         // Draw horizontal roads
@@ -90,11 +91,12 @@ class RoadLayoutGenerator {
             const isArterial = arterialSpacing > 0 && y % arterialSpacing === 0 && y !== 0;
             const roadType = isArterial ? 'ARTERIAL' : 'LOCAL';
 
-            const yPos = randomize(this.metersToPixels(y, size));
+            const yPos = this.metersToPixels(y, size);
+            const yPosRandomized = randomize(yPos);
             const x1 = 0;
             const x2 = canvasSize;
 
-            this.drawRoad(x1, yPos, x2, yPos, roadType);
+            this.drawRoad(x1, yPosRandomized, x2, yPosRandomized, roadType);
         }
     }
 
@@ -307,6 +309,8 @@ generateBtn.addEventListener('click', () => {
         seed: parseInt(seedInput.value)
     };
 
+    console.log('Generating with params:', params);
+
     const pattern = patternSelect.value;
 
     switch (pattern) {
@@ -326,6 +330,7 @@ generateBtn.addEventListener('click', () => {
 
     const stats = generator.getStats();
     statsDisplay.textContent = `Generated: ${stats.arterial} arterial, ${stats.collector} collector, ${stats.local} local roads`;
+    console.log('Generation complete:', stats);
 });
 
 // Export PNG
