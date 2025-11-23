@@ -24,8 +24,8 @@
         <Reference Include="Unity.Burst"><Private>false</Private></Reference>
         <Reference Include="UnityEngine.CoreModule"><Private>false</Private></Reference>
 
-        <!-- Add HarmonyX -->
-        <PackageReference Include="HarmonyX" Version="2.10.1" />
+        <!-- Add Harmony (official pardeike version) -->
+        <PackageReference Include="Lib.Harmony" Version="2.3.3" />
     </ItemGroup>
 
     <ItemGroup>
