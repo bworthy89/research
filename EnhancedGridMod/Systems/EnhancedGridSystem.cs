@@ -14,9 +14,32 @@ namespace EnhancedGrid.Systems
 
             // Apply Harmony patches
             m_Harmony = new Harmony("com.enhancedgrid.mod");
-            m_Harmony.PatchAll();
 
-            Mod.log.Info("Harmony patches applied successfully");
+            try
+            {
+                m_Harmony.PatchAll();
+                Mod.log.Info("Harmony patches applied successfully");
+
+                // Diagnostic: List all patches
+                var patches = m_Harmony.GetPatchedMethods();
+                int count = 0;
+                foreach (var method in patches)
+                {
+                    count++;
+                    Mod.log.Info($"Patched method: {method.DeclaringType?.Name}.{method.Name}");
+                }
+                Mod.log.Info($"Total patches applied: {count}");
+
+                if (count == 0)
+                {
+                    Mod.log.Error("WARNING: No Harmony patches were applied! The mod will not function.");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Mod.log.Error($"Failed to apply Harmony patches: {ex.Message}");
+                Mod.log.Error($"Stack trace: {ex.StackTrace}");
+            }
         }
 
         protected override void OnDestroy()

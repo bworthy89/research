@@ -7,6 +7,8 @@ using Game.Net;
 using Game.Common;
 using Game.Prefabs;
 using Colossal.Mathematics;
+using System.Reflection;
+using System.Linq;
 
 namespace EnhancedGrid.Patches
 {
@@ -14,11 +16,42 @@ namespace EnhancedGrid.Patches
     /// Harmony patch for NetToolSystem.CreateDefinitionsJob.CreateGrid method
     /// Enhances the grid tool with manual grid count and arterial road spacing
     /// </summary>
-    [HarmonyPatch(typeof(NetToolSystem.CreateDefinitionsJob), "CreateGrid")]
+    [HarmonyPatch]
     public static class GridToolPatch
     {
         private static Entity s_ArterialPrefab = Entity.Null;
         private static Entity s_LocalPrefab = Entity.Null;
+
+        /// <summary>
+        /// Manually specify target method for better diagnostics
+        /// </summary>
+        static MethodBase TargetMethod()
+        {
+            var jobType = typeof(NetToolSystem.CreateDefinitionsJob);
+            Mod.log.Info($"Looking for CreateGrid in type: {jobType.FullName}");
+
+            var methods = jobType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            Mod.log.Info($"Found {methods.Length} methods in CreateDefinitionsJob");
+
+            foreach (var method in methods)
+            {
+                Mod.log.Info($"  Method: {method.Name}({string.Join(", ", method.GetParameters().Select(p => p.ParameterType.Name))})");
+            }
+
+            var createGridMethod = jobType.GetMethod("CreateGrid", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+            if (createGridMethod == null)
+            {
+                Mod.log.Error("Could not find CreateGrid method! Available methods listed above.");
+                return null;
+            }
+
+            Mod.log.Info($"Found CreateGrid: {createGridMethod.Name}");
+            var parameters = createGridMethod.GetParameters();
+            Mod.log.Info($"  Parameters: {string.Join(", ", parameters.Select(p => $"{p.ParameterType.Name} {p.Name}"))}");
+
+            return createGridMethod;
+        }
 
         /// <summary>
         /// Prefix patch intercepts the original CreateGrid method
@@ -27,11 +60,23 @@ namespace EnhancedGrid.Patches
             ref NetToolSystem.CreateDefinitionsJob __instance,
             ref NativeParallelHashMap<Entity, OwnerDefinition> ownerDefinitions)
         {
+            // DIAGNOSTIC: Log that patch is being called
+            Mod.log.Info("🎯 GridToolPatch.Prefix called!");
+
             var settings = Mod.Settings;
+
+            if (settings == null)
+            {
+                Mod.log.Error("Settings is null!");
+                return true;
+            }
+
+            Mod.log.Info($"UseManualGridCount: {settings.UseManualGridCount}, GridX: {settings.GridX}, GridY: {settings.GridY}");
 
             // Only override if manual mode enabled
             if (!settings.UseManualGridCount)
             {
+                Mod.log.Info("Manual mode disabled, using original grid generation");
                 return true; // Run original method
             }
 
