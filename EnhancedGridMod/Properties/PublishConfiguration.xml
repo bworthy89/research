@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Name>Enhanced Grid Tool</Name>
+  <ModId>EnhancedGrid</ModId>
+  <ModVersion>1.0.0</ModVersion>
+  <GameVersion>1.1.*</GameVersion>
+  <Author>EnhancedGrid Team</Author>
+  <Description>Enhanced grid tool for Cities: Skylines II with manual grid count and arterial road spacing support.
+
+Features:
+- Manual grid count override (specify exact grid dimensions like 10x10)
+- Arterial road spacing (automatically place larger roads every N blocks)
+- Block size variation (add organic feel to neighborhoods)
+- All configurable through in-game settings menu
+
+Perfect for creating planned neighborhoods with proper road hierarchy!</Description>
+  <Dependency>base</Dependency>
+  <ChangeLog>
+v1.0.0 - Initial Release
+- Manual grid count control
+- Arterial road spacing
+- Block variation settings
+- In-game settings UI
+  </ChangeLog>
+  <ExternalLink Type="Readme">https://github.com/yourusername/EnhancedGrid</ExternalLink>
+  <ExternalLink Type="Discord">https://discord.gg/yourdiscord</ExternalLink>
+</Configuration>
