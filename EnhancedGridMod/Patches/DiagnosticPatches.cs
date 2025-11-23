@@ -17,9 +17,16 @@ namespace EnhancedGrid.Patches
     [HarmonyPatch(typeof(NetToolSystem.CreateDefinitionsJob), "CreateStraightLine")]
     public static class CreateStraightLinePatch
     {
-        static bool Prefix(ref NativeParallelHashMap<Entity, OwnerDefinition> ownerDefinitions, int2 gridSize)
+        static bool Prefix(object[] __args)
         {
-            Mod.log.Info($"🟢 CreateStraightLine called! gridSize: {gridSize.x}x{gridSize.y}");
+            Mod.log.Info($"🟢 CreateStraightLine called! Arguments: {__args?.Length ?? 0}");
+            if (__args != null && __args.Length > 0)
+            {
+                for (int i = 0; i < __args.Length; i++)
+                {
+                    Mod.log.Info($"  Arg[{i}]: {__args[i]?.GetType().Name ?? "null"}");
+                }
+            }
             return true; // Let original run for now
         }
     }
