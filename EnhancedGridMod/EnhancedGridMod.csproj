@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <TargetFramework>net472</TargetFramework>
         <Configurations>Debug;Release</Configurations>
         <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
+        <LangVersion>latest</LangVersion>
     </PropertyGroup>
 
     <!--Import official mod build system-->
@@ -25,12 +27,19 @@
         <Reference Include="UnityEngine.CoreModule"><Private>false</Private></Reference>
 
         <!-- Add Harmony (official pardeike version) -->
-        <PackageReference Include="Lib.Harmony" Version="2.3.3" />
+        <!-- PrivateAssets="all" prevents copying to output - CS2/BepInEx provides Harmony at runtime -->
+        <PackageReference Include="Lib.Harmony" Version="2.3.3" PrivateAssets="all" />
     </ItemGroup>
 
     <ItemGroup>
         <None Include="$(ModPropsFile)" Link="Properties\Mod.props" />
         <None Include="$(ModTargetsFile)" Link="Properties\Mod.targets" />
     </ItemGroup>
+
+    <!-- Disable Burst compilation to avoid cache issues -->
+    <PropertyGroup>
+        <BurstCompile>false</BurstCompile>
+        <EnableBurstCompilation>false</EnableBurstCompilation>
+    </PropertyGroup>
 
 </Project>

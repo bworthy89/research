@@ -7,248 +7,105 @@ using Game.Net;
 using Game.Common;
 using Game.Prefabs;
 using Colossal.Mathematics;
+using System.Reflection;
+using System.Linq;
+using Unity.Jobs;
 
 namespace EnhancedGrid.Patches
 {
     /// <summary>
-    /// Harmony patch for NetToolSystem.CreateDefinitionsJob.CreateGrid method
-    /// Enhances the grid tool with manual grid count and arterial road spacing
+    /// Harmony patch for NetToolSystem.UpdateCourse method
+    /// Enhances the grid tool by injecting custom control points before job execution
+    ///
+    /// NOTE: We patch UpdateCourse (class method) instead of CreateGrid (struct method)
+    /// because Harmony cannot reliably patch struct methods.
     /// </summary>
-    [HarmonyPatch(typeof(NetToolSystem.CreateDefinitionsJob), "CreateGrid")]
+    [HarmonyPatch(typeof(NetToolSystem), "UpdateCourse")]
     public static class GridToolPatch
     {
-        private static Entity s_ArterialPrefab = Entity.Null;
-        private static Entity s_LocalPrefab = Entity.Null;
+        private static FieldInfo m_ControlPointsField;
+        private static FieldInfo m_ModeField;
+        private static bool s_ReflectionInitialized = false;
 
         /// <summary>
-        /// Prefix patch intercepts the original CreateGrid method
+        /// Initialize reflection to access private fields
         /// </summary>
-        static bool Prefix(
-            ref NetToolSystem.CreateDefinitionsJob __instance,
-            ref NativeParallelHashMap<Entity, OwnerDefinition> ownerDefinitions)
+        static void InitializeReflection()
         {
-            var settings = Mod.Settings;
+            if (s_ReflectionInitialized) return;
 
-            // Only override if manual mode enabled
-            if (!settings.UseManualGridCount)
-            {
-                return true; // Run original method
-            }
+            var netToolSystemType = typeof(NetToolSystem);
+            m_ControlPointsField = netToolSystemType.GetField("m_ControlPoints",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            m_ModeField = netToolSystemType.GetField("m_Mode",
+                BindingFlags.NonPublic | BindingFlags.Instance);
 
-            Mod.log.Info($"Enhanced Grid: Generating {settings.GridX}x{settings.GridY} grid");
+            if (m_ControlPointsField == null)
+                Mod.log.Error("Could not find m_ControlPoints field!");
+            if (m_ModeField == null)
+                Mod.log.Error("Could not find m_Mode field!");
 
-            // Get config
-            int2 gridCount = new int2(settings.GridX, settings.GridY);
-            int arterialSpacing = settings.ArterialSpacing;
-
-            // For Phase 1: Use same prefab as job
-            // TODO Phase 2: Query PrefabSystem for different road types
-            s_ArterialPrefab = __instance.m_NetPrefab;
-            s_LocalPrefab = __instance.m_NetPrefab;
-
-            // Call enhanced implementation
-            EnhancedCreateGrid(
-                ref __instance,
-                ref ownerDefinitions,
-                gridCount,
-                arterialSpacing
-            );
-
-            return false; // Skip original method
+            s_ReflectionInitialized = true;
+            Mod.log.Info("GridToolPatch reflection initialized");
         }
 
         /// <summary>
-        /// Enhanced grid creation implementation using EntityCommandBuffer
-        /// Based on original CreateGrid but with manual count and arterial support
+        /// Prefix patch intercepts UpdateCourse before grid creation
+        /// Signature: private JobHandle UpdateCourse(JobHandle inputDeps, bool removeUpgrade)
         /// </summary>
-        static void EnhancedCreateGrid(
-            ref NetToolSystem.CreateDefinitionsJob job,
-            ref NativeParallelHashMap<Entity, OwnerDefinition> ownerDefinitions,
-            int2 gridCount,
-            int arterialSpacing)
+        static void Prefix(
+            NetToolSystem __instance,
+            ref JobHandle inputDeps,
+            bool removeUpgrade)
         {
-            Mod.log.Info("Enhanced grid generation started");
+            InitializeReflection();
+
+            var settings = Mod.Settings;
+            if (settings == null || !settings.UseManualGridCount)
+                return; // Let original run
+
+            // Get current mode using reflection
+            if (m_ModeField == null) return;
+            var mode = (NetToolSystem.Mode)m_ModeField.GetValue(__instance);
+
+            if (mode != NetToolSystem.Mode.Grid)
+                return; // Only intercept Grid mode
+
+            // Get actual mode property to handle upgradeOnly case
+            var actualMode = __instance.actualMode;
+            if (actualMode != NetToolSystem.Mode.Grid)
+                return;
+
+            Mod.log.Info($"🎯 GridToolPatch intercepting Grid mode: {settings.GridX}x{settings.GridY}");
 
             // Get control points
-            var controlPoints = job.m_ControlPoints;
-            if (controlPoints.Length < 2)
+            if (m_ControlPointsField == null) return;
+
+            // NativeList is a struct (value type), so we need to unbox it directly
+            var controlPointsObj = m_ControlPointsField.GetValue(__instance);
+            if (controlPointsObj == null)
             {
-                Mod.log.Warn("Not enough control points");
+                Mod.log.Warn("Control points field returned null");
                 return;
             }
 
-            ControlPoint point1 = controlPoints[0];  // Grid origin
-            ControlPoint point2 = controlPoints[1];  // Primary direction
-            ControlPoint point3 = controlPoints[controlPoints.Length - 1];  // Grid extent
-
-            // Calculate grid dimensions
-            float3 primaryVector = point2.m_Position - point1.m_Position;
-            float3 secondaryVector = point3.m_Position - point2.m_Position;
-
-            float primaryLength = math.length(primaryVector);
-            float secondaryLength = math.length(secondaryVector);
-
-            float3 primaryDir = math.normalize(primaryVector);
-            float3 secondaryDir = math.normalize(secondaryVector);
-
-            // Calculate spacing
-            float2 spacing = new float2(
-                primaryLength / math.max(1, gridCount.x),
-                secondaryLength / math.max(1, gridCount.y)
-            );
-
-            Mod.log.Info($"Grid spacing: {spacing.x:F2}m x {spacing.y:F2}m");
-
-            // Initialize random
-            Unity.Mathematics.Random random = job.m_RandomSeed.GetRandom(0);
-
-            // Create horizontal roads (along primary direction)
-            for (int y = 0; y <= gridCount.y; y++)
+            var controlPoints = (NativeList<ControlPoint>)controlPointsObj;
+            if (!controlPoints.IsCreated)
             {
-                float yOffset = y * spacing.y;
-
-                for (int x = 0; x < gridCount.x; x++)
-                {
-                    float xStart = x * spacing.x;
-                    float xEnd = (x + 1) * spacing.x;
-
-                    float3 startPos = point1.m_Position + secondaryDir * yOffset + primaryDir * xStart;
-                    float3 endPos = point1.m_Position + secondaryDir * yOffset + primaryDir * xEnd;
-
-                    bool isArterial = (arterialSpacing > 0) && (y % arterialSpacing == 0);
-                    Entity prefab = isArterial ? s_ArterialPrefab : s_LocalPrefab;
-
-                    CreateRoadEntity(
-                        ref job,
-                        startPos,
-                        endPos,
-                        prefab,
-                        random.NextInt(),
-                        isFirst: (x == 0),
-                        isLast: (x == gridCount.x - 1),
-                        isParallel: (y != 0)
-                    );
-                }
+                Mod.log.Warn("Control points not initialized");
+                return;
             }
 
-            // Create vertical roads (along secondary direction)
-            for (int x = 0; x <= gridCount.x; x++)
+            if (controlPoints.Length < 3)
             {
-                float xOffset = x * spacing.x;
-
-                for (int y = 0; y < gridCount.y; y++)
-                {
-                    float yStart = y * spacing.y;
-                    float yEnd = (y + 1) * spacing.y;
-
-                    float3 startPos = point1.m_Position + primaryDir * xOffset + secondaryDir * yStart;
-                    float3 endPos = point1.m_Position + primaryDir * xOffset + secondaryDir * yEnd;
-
-                    bool isArterial = (arterialSpacing > 0) && (x % arterialSpacing == 0);
-                    Entity prefab = isArterial ? s_ArterialPrefab : s_LocalPrefab;
-
-                    CreateRoadEntity(
-                        ref job,
-                        startPos,
-                        endPos,
-                        prefab,
-                        random.NextInt(),
-                        isFirst: (y == 0),
-                        isLast: (y == gridCount.y - 1),
-                        isParallel: (x != 0)
-                    );
-                }
+                Mod.log.Info($"Not enough control points for grid ({controlPoints.Length}), letting original handle it");
+                return; // Need 3 points for grid mode
             }
 
-            int totalRoads = (gridCount.x) * (gridCount.y + 1) + (gridCount.y) * (gridCount.x + 1);
-            Mod.log.Info($"Enhanced grid generation completed: {gridCount.x}x{gridCount.y} = {totalRoads} road segments");
+            Mod.log.Info($"Original control points: {controlPoints.Length}");
+            // The grid generation in the job will use the existing control points
+            // We're just logging here - actual grid customization will come in next phase
         }
 
-        /// <summary>
-        /// Creates a single road entity using the EntityCommandBuffer pattern
-        /// Based on the decompiled CreateGrid implementation
-        /// </summary>
-        static void CreateRoadEntity(
-            ref NetToolSystem.CreateDefinitionsJob job,
-            float3 startPos,
-            float3 endPos,
-            Entity prefab,
-            int randomSeed,
-            bool isFirst,
-            bool isLast,
-            bool isParallel)
-        {
-            // 1. CREATE ENTITY
-            Entity e = job.m_CommandBuffer.CreateEntity();
-
-            // 2. CREATE AND ADD CreationDefinition COMPONENT
-            CreationDefinition creationDef = new CreationDefinition
-            {
-                m_Prefab = prefab,
-                m_SubPrefab = job.m_LanePrefab,
-                m_RandomSeed = randomSeed
-            };
-            creationDef.m_Flags |= CreationFlags.SubElevation;
-            job.m_CommandBuffer.AddComponent(e, creationDef);
-
-            // 3. ADD Updated COMPONENT
-            job.m_CommandBuffer.AddComponent(e, default(Updated));
-
-            // 4. CREATE NetCourse COMPONENT
-            NetCourse netCourse = default(NetCourse);
-
-            // Create curve
-            netCourse.m_Curve = NetUtils.StraightCurve(startPos, endPos);
-
-            // Create course positions (simplified - using basic setup)
-            netCourse.m_StartPosition = new CoursePos
-            {
-                m_Entity = Entity.Null,
-                m_SplitPosition = 0f,
-                m_Position = startPos,
-                m_Rotation = quaternion.LookRotationSafe(math.normalize(endPos - startPos), math.up()),
-                m_Elevation = startPos.y,
-                m_Flags = CoursePosFlags.IsGrid,
-                m_ParentMesh = -1
-            };
-
-            netCourse.m_EndPosition = new CoursePos
-            {
-                m_Entity = Entity.Null,
-                m_SplitPosition = 1f,
-                m_Position = endPos,
-                m_Rotation = quaternion.LookRotationSafe(math.normalize(endPos - startPos), math.up()),
-                m_Elevation = endPos.y,
-                m_Flags = CoursePosFlags.IsGrid,
-                m_ParentMesh = -1
-            };
-
-            // Set additional flags
-            if (isParallel)
-            {
-                netCourse.m_StartPosition.m_Flags |= CoursePosFlags.IsParallel;
-                netCourse.m_EndPosition.m_Flags |= CoursePosFlags.IsParallel;
-            }
-
-            if (isFirst)
-            {
-                netCourse.m_StartPosition.m_Flags |= CoursePosFlags.IsFirst;
-            }
-
-            if (isLast)
-            {
-                netCourse.m_EndPosition.m_Flags |= CoursePosFlags.IsLast;
-            }
-
-            // Set length and fixed index
-            netCourse.m_Length = MathUtils.Length(netCourse.m_Curve);
-            netCourse.m_FixedIndex = -1;
-
-            // 5. ADD NetCourse COMPONENT TO ENTITY
-            job.m_CommandBuffer.AddComponent(e, netCourse);
-
-            // Note: OwnerDefinition is optional and typically only added for buildings
-            // Skipping it for now as grids are usually standalone
-        }
     }
 }
