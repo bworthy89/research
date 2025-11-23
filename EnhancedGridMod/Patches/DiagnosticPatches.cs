@@ -7,6 +7,7 @@ using Game.Net;
 using Game.Common;
 using Colossal.Mathematics;
 using System.Reflection;
+using System.Linq;
 
 namespace EnhancedGrid.Patches
 {
@@ -40,9 +41,22 @@ namespace EnhancedGrid.Patches
         }
     }
 
-    [HarmonyPatch(typeof(NetToolSystem.CreateDefinitionsJob), "CreateParallelCourse")]
+    [HarmonyPatch]
     public static class CreateParallelCoursePatch
     {
+        static System.Collections.Generic.IEnumerable<MethodBase> TargetMethods()
+        {
+            var jobType = typeof(NetToolSystem.CreateDefinitionsJob);
+            var methods = jobType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .Where(m => m.Name == "CreateParallelCourse");
+
+            foreach (var method in methods)
+            {
+                Mod.log.Info($"Found CreateParallelCourse overload: {method.Name}({string.Join(", ", method.GetParameters().Select(p => p.ParameterType.Name))})");
+                yield return method;
+            }
+        }
+
         static void Prefix()
         {
             Mod.log.Info("🟠 CreateParallelCourse called!");
