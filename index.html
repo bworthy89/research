@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cities Skylines 2 - Road Layout Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>CS2 Road Layout Generator</h1>
+            <p>Generate road network overlays for use with the ImageOverlay mod</p>
+        </header>
+
+        <div class="main-content">
+            <aside class="controls">
+                <h2>Parameters</h2>
+
+                <div class="control-group">
+                    <label for="pattern">Pattern Type</label>
+                    <select id="pattern">
+                        <option value="grid">American Grid</option>
+                        <option value="grid-angled">Angled Grid</option>
+                        <option value="organic">Organic</option>
+                        <option value="radial">Radial</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="size">Map Size (meters)</label>
+                    <input type="number" id="size" value="2000" min="500" max="14336" step="100">
+                </div>
+
+                <div class="control-group">
+                    <label for="blockWidth">Block Width (m)</label>
+                    <input type="number" id="blockWidth" value="100" min="50" max="500" step="10">
+                </div>
+
+                <div class="control-group">
+                    <label for="blockHeight">Block Height (m)</label>
+                    <input type="number" id="blockHeight" value="200" min="50" max="500" step="10">
+                </div>
+
+                <div class="control-group">
+                    <label for="arterialSpacing">Arterial Road Spacing (m)</label>
+                    <input type="number" id="arterialSpacing" value="400" min="0" max="2000" step="100">
+                    <small>0 = no arterial roads</small>
+                </div>
+
+                <div class="control-group">
+                    <label for="randomization">Randomization (%)</label>
+                    <input type="range" id="randomization" value="0" min="0" max="50" step="5">
+                    <span id="randomizationValue">0%</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="seed">Random Seed</label>
+                    <input type="number" id="seed" value="12345">
+                    <button id="randomSeed" class="btn-secondary">Randomize</button>
+                </div>
+
+                <div class="button-group">
+                    <button id="generate" class="btn-primary">Generate Layout</button>
+                    <button id="export" class="btn-success">Export PNG</button>
+                </div>
+
+                <div class="info-box">
+                    <h3>Instructions:</h3>
+                    <ol>
+                        <li>Adjust parameters above</li>
+                        <li>Click "Generate Layout"</li>
+                        <li>Click "Export PNG"</li>
+                        <li>Place PNG in: <code>%USERPROFILE%/AppData/LocalLow/Colossal Order/Cities Skylines II/Overlays/</code></li>
+                        <li>Load in CS2 with ImageOverlay mod</li>
+                    </ol>
+                </div>
+
+                <div class="legend">
+                    <h3>Legend:</h3>
+                    <div class="legend-item">
+                        <span class="color-box arterial"></span>
+                        <span>Arterial Roads</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="color-box collector"></span>
+                        <span>Collector Roads</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="color-box local"></span>
+                        <span>Local Streets</span>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="canvas-area">
+                <div class="canvas-container">
+                    <canvas id="roadCanvas" width="2048" height="2048"></canvas>
+                </div>
+                <div class="stats">
+                    <span id="stats">No layout generated yet</span>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
