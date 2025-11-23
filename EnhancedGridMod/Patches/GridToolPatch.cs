@@ -6,6 +6,7 @@ using Unity.Entities;
 using Game.Net;
 using Game.Common;
 using Game.Prefabs;
+using Colossal.Mathematics;
 
 namespace EnhancedGrid.Patches
 {
@@ -203,7 +204,7 @@ namespace EnhancedGrid.Patches
             netCourse.m_StartPosition = new CoursePos
             {
                 m_Entity = Entity.Null,
-                m_SplitPosition = float2.zero,
+                m_SplitPosition = 0f,
                 m_Position = startPos,
                 m_Rotation = quaternion.LookRotationSafe(math.normalize(endPos - startPos), math.up()),
                 m_Elevation = startPos.y,
@@ -214,7 +215,7 @@ namespace EnhancedGrid.Patches
             netCourse.m_EndPosition = new CoursePos
             {
                 m_Entity = Entity.Null,
-                m_SplitPosition = float2.zero,
+                m_SplitPosition = 1f,
                 m_Position = endPos,
                 m_Rotation = quaternion.LookRotationSafe(math.normalize(endPos - startPos), math.up()),
                 m_Elevation = endPos.y,
