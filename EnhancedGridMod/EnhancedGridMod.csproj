@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <TargetFramework>net472</TargetFramework>
         <Configurations>Debug;Release</Configurations>
         <PublishConfigurationPath>Properties\PublishConfiguration.xml</PublishConfigurationPath>
+        <LangVersion>latest</LangVersion>
     </PropertyGroup>
 
     <!--Import official mod build system-->
