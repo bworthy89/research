@@ -80,11 +80,19 @@ namespace EnhancedGrid.Patches
 
             // Get control points
             if (m_ControlPointsField == null) return;
-            var controlPoints = m_ControlPointsField.GetValue(__instance) as NativeList<ControlPoint>;
 
-            if (controlPoints == null || !controlPoints.IsCreated)
+            // NativeList is a struct (value type), so we need to unbox it directly
+            var controlPointsObj = m_ControlPointsField.GetValue(__instance);
+            if (controlPointsObj == null)
             {
-                Mod.log.Warn("Control points not available");
+                Mod.log.Warn("Control points field returned null");
+                return;
+            }
+
+            var controlPoints = (NativeList<ControlPoint>)controlPointsObj;
+            if (!controlPoints.IsCreated)
+            {
+                Mod.log.Warn("Control points not initialized");
                 return;
             }
 
