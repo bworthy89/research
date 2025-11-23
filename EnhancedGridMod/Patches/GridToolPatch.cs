@@ -6,6 +6,7 @@ using Unity.Entities;
 using Game.Net;
 using Game.Common;
 using Game.Prefabs;
+using Colossal.Mathematics;
 
 namespace EnhancedGrid.Patches
 {
@@ -23,12 +24,8 @@ namespace EnhancedGrid.Patches
         /// Prefix patch intercepts the original CreateGrid method
         /// </summary>
         static bool Prefix(
-            NetToolSystem.CreateDefinitionsJob __instance,
-            ref NativeParallelHashMap<Entity, OwnerDefinition> ownerDefinitions,
-            Bezier4x3 centerCurve,
-            Bezier4x3 sideCurve,
-            bool isStraight,
-            Entity topLevelEntity)
+            ref NetToolSystem.CreateDefinitionsJob __instance,
+            ref NativeParallelHashMap<Entity, OwnerDefinition> ownerDefinitions)
         {
             var settings = Mod.Settings;
 
@@ -51,12 +48,8 @@ namespace EnhancedGrid.Patches
 
             // Call enhanced implementation
             EnhancedCreateGrid(
-                __instance,
+                ref __instance,
                 ref ownerDefinitions,
-                centerCurve,
-                sideCurve,
-                isStraight,
-                topLevelEntity,
                 gridCount,
                 arterialSpacing
             );
@@ -65,109 +58,197 @@ namespace EnhancedGrid.Patches
         }
 
         /// <summary>
-        /// Enhanced grid creation implementation
+        /// Enhanced grid creation implementation using EntityCommandBuffer
         /// Based on original CreateGrid but with manual count and arterial support
         /// </summary>
         static void EnhancedCreateGrid(
-            NetToolSystem.CreateDefinitionsJob job,
+            ref NetToolSystem.CreateDefinitionsJob job,
             ref NativeParallelHashMap<Entity, OwnerDefinition> ownerDefinitions,
-            Bezier4x3 centerCurve,
-            Bezier4x3 sideCurve,
-            bool isStraight,
-            Entity topLevelEntity,
             int2 gridCount,
             int arterialSpacing)
         {
             Mod.log.Info("Enhanced grid generation started");
 
-            // Get the three grid control points
-            float3 point1 = centerCurve.a;  // Grid origin
-            float3 point2 = centerCurve.d;  // Primary direction
-            float3 point3 = sideCurve.d;    // Grid extent
+            // Get control points
+            var controlPoints = job.m_ControlPoints;
+            if (controlPoints.Length < 2)
+            {
+                Mod.log.Warn("Not enough control points");
+                return;
+            }
 
-            // Calculate base vectors
-            float3 primaryVector = point2 - point1;
-            float3 secondaryVector = point3 - point2;
+            ControlPoint point1 = controlPoints[0];  // Grid origin
+            ControlPoint point2 = controlPoints[1];  // Primary direction
+            ControlPoint point3 = controlPoints[controlPoints.Length - 1];  // Grid extent
 
-            // Calculate spacing for each direction
-            float2 spacing = new float2(
-                math.length(primaryVector) / math.max(1, gridCount.x),
-                math.length(secondaryVector) / math.max(1, gridCount.y)
-            );
+            // Calculate grid dimensions
+            float3 primaryVector = point2.m_Position - point1.m_Position;
+            float3 secondaryVector = point3.m_Position - point2.m_Position;
 
-            // Normalize direction vectors
+            float primaryLength = math.length(primaryVector);
+            float secondaryLength = math.length(secondaryVector);
+
             float3 primaryDir = math.normalize(primaryVector);
             float3 secondaryDir = math.normalize(secondaryVector);
 
+            // Calculate spacing
+            float2 spacing = new float2(
+                primaryLength / math.max(1, gridCount.x),
+                secondaryLength / math.max(1, gridCount.y)
+            );
+
             Mod.log.Info($"Grid spacing: {spacing.x:F2}m x {spacing.y:F2}m");
+
+            // Initialize random
+            Unity.Mathematics.Random random = job.m_RandomSeed.GetRandom(0);
 
             // Create horizontal roads (along primary direction)
             for (int y = 0; y <= gridCount.y; y++)
             {
-                float3 startPoint = point1 + secondaryDir * (y * spacing.y);
-                float3 endPoint = startPoint + primaryVector;
+                float yOffset = y * spacing.y;
 
-                bool isArterial = (arterialSpacing > 0) && (y % arterialSpacing == 0);
-                Entity prefab = isArterial ? s_ArterialPrefab : s_LocalPrefab;
+                for (int x = 0; x < gridCount.x; x++)
+                {
+                    float xStart = x * spacing.x;
+                    float xEnd = (x + 1) * spacing.x;
 
-                CreateRoad(job, ref ownerDefinitions, startPoint, endPoint, prefab, topLevelEntity);
+                    float3 startPos = point1.m_Position + secondaryDir * yOffset + primaryDir * xStart;
+                    float3 endPos = point1.m_Position + secondaryDir * yOffset + primaryDir * xEnd;
+
+                    bool isArterial = (arterialSpacing > 0) && (y % arterialSpacing == 0);
+                    Entity prefab = isArterial ? s_ArterialPrefab : s_LocalPrefab;
+
+                    CreateRoadEntity(
+                        ref job,
+                        startPos,
+                        endPos,
+                        prefab,
+                        random.NextInt(),
+                        isFirst: (x == 0),
+                        isLast: (x == gridCount.x - 1),
+                        isParallel: (y != 0)
+                    );
+                }
             }
 
             // Create vertical roads (along secondary direction)
             for (int x = 0; x <= gridCount.x; x++)
             {
-                float3 startPoint = point1 + primaryDir * (x * spacing.x);
-                float3 endPoint = startPoint + secondaryVector;
+                float xOffset = x * spacing.x;
 
-                bool isArterial = (arterialSpacing > 0) && (x % arterialSpacing == 0);
-                Entity prefab = isArterial ? s_ArterialPrefab : s_LocalPrefab;
+                for (int y = 0; y < gridCount.y; y++)
+                {
+                    float yStart = y * spacing.y;
+                    float yEnd = (y + 1) * spacing.y;
 
-                CreateRoad(job, ref ownerDefinitions, startPoint, endPoint, prefab, topLevelEntity);
+                    float3 startPos = point1.m_Position + primaryDir * xOffset + secondaryDir * yStart;
+                    float3 endPos = point1.m_Position + primaryDir * xOffset + secondaryDir * yEnd;
+
+                    bool isArterial = (arterialSpacing > 0) && (x % arterialSpacing == 0);
+                    Entity prefab = isArterial ? s_ArterialPrefab : s_LocalPrefab;
+
+                    CreateRoadEntity(
+                        ref job,
+                        startPos,
+                        endPos,
+                        prefab,
+                        random.NextInt(),
+                        isFirst: (y == 0),
+                        isLast: (y == gridCount.y - 1),
+                        isParallel: (x != 0)
+                    );
+                }
             }
 
-            Mod.log.Info($"Enhanced grid generation completed: {gridCount.x}x{gridCount.y} = {(gridCount.x + 1) * 2 + (gridCount.y + 1) * 2 - 4} roads");
+            int totalRoads = (gridCount.x) * (gridCount.y + 1) + (gridCount.y) * (gridCount.x + 1);
+            Mod.log.Info($"Enhanced grid generation completed: {gridCount.x}x{gridCount.y} = {totalRoads} road segments");
         }
 
         /// <summary>
-        /// Creates a single road segment
+        /// Creates a single road entity using the EntityCommandBuffer pattern
+        /// Based on the decompiled CreateGrid implementation
         /// </summary>
-        static void CreateRoad(
-            NetToolSystem.CreateDefinitionsJob job,
-            ref NativeParallelHashMap<Entity, OwnerDefinition> ownerDefinitions,
-            float3 startPoint,
-            float3 endPoint,
+        static void CreateRoadEntity(
+            ref NetToolSystem.CreateDefinitionsJob job,
+            float3 startPos,
+            float3 endPos,
             Entity prefab,
-            Entity topLevelEntity)
+            int randomSeed,
+            bool isFirst,
+            bool isLast,
+            bool isParallel)
         {
-            // Create straight curve between start and end points
-            Bezier4x3 curve = NetUtils.StraightCurve(startPoint, endPoint);
+            // 1. CREATE ENTITY
+            Entity e = job.m_CommandBuffer.CreateEntity();
 
-            // Create road definition
-            CreationDefinition definition = new CreationDefinition
+            // 2. CREATE AND ADD CreationDefinition COMPONENT
+            CreationDefinition creationDef = new CreationDefinition
             {
                 m_Prefab = prefab,
-                m_SubPrefab = Entity.Null,
-                m_Flags = CreationFlags.Permanent | CreationFlags.Attach,
-                m_RandomSeed = 0,
-                m_Curve = curve,
-                m_Original = Entity.Null,
-                m_Owner = topLevelEntity
+                m_SubPrefab = job.m_LanePrefab,
+                m_RandomSeed = randomSeed
+            };
+            creationDef.m_Flags |= CreationFlags.SubElevation;
+            job.m_CommandBuffer.AddComponent(e, creationDef);
+
+            // 3. ADD Updated COMPONENT
+            job.m_CommandBuffer.AddComponent(e, default(Updated));
+
+            // 4. CREATE NetCourse COMPONENT
+            NetCourse netCourse = default(NetCourse);
+
+            // Create curve
+            netCourse.m_Curve = NetUtils.StraightCurve(startPos, endPos);
+
+            // Create course positions (simplified - using basic setup)
+            netCourse.m_StartPosition = new CoursePos
+            {
+                m_Entity = Entity.Null,
+                m_SplitPosition = float2.zero,
+                m_Position = startPos,
+                m_Rotation = quaternion.LookRotationSafe(math.normalize(endPos - startPos), math.up()),
+                m_Elevation = startPos.y,
+                m_Flags = CoursePosFlags.IsGrid,
+                m_ParentMesh = -1
             };
 
-            // Add to definitions map
-            if (!ownerDefinitions.ContainsKey(topLevelEntity))
+            netCourse.m_EndPosition = new CoursePos
             {
-                ownerDefinitions.Add(topLevelEntity, new OwnerDefinition
-                {
-                    m_Prefab = prefab,
-                    m_Position = startPoint,
-                    m_Rotation = quaternion.identity
-                });
+                m_Entity = Entity.Null,
+                m_SplitPosition = float2.zero,
+                m_Position = endPos,
+                m_Rotation = quaternion.LookRotationSafe(math.normalize(endPos - startPos), math.up()),
+                m_Elevation = endPos.y,
+                m_Flags = CoursePosFlags.IsGrid,
+                m_ParentMesh = -1
+            };
+
+            // Set additional flags
+            if (isParallel)
+            {
+                netCourse.m_StartPosition.m_Flags |= CoursePosFlags.IsParallel;
+                netCourse.m_EndPosition.m_Flags |= CoursePosFlags.IsParallel;
             }
 
-            // Note: The actual road creation is handled by the NetToolSystem
-            // after the CreateDefinitionsJob completes
-            // We're just adding the definition to the collection
+            if (isFirst)
+            {
+                netCourse.m_StartPosition.m_Flags |= CoursePosFlags.IsFirst;
+            }
+
+            if (isLast)
+            {
+                netCourse.m_EndPosition.m_Flags |= CoursePosFlags.IsLast;
+            }
+
+            // Set length and fixed index
+            netCourse.m_Length = MathUtils.Length(netCourse.m_Curve);
+            netCourse.m_FixedIndex = -1;
+
+            // 5. ADD NetCourse COMPONENT TO ENTITY
+            job.m_CommandBuffer.AddComponent(e, netCourse);
+
+            // Note: OwnerDefinition is optional and typically only added for buildings
+            // Skipping it for now as grids are usually standalone
         }
     }
 }
