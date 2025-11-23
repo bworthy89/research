@@ -27,7 +27,8 @@
         <Reference Include="UnityEngine.CoreModule"><Private>false</Private></Reference>
 
         <!-- Add Harmony (official pardeike version) -->
-        <PackageReference Include="Lib.Harmony" Version="2.3.3" />
+        <!-- PrivateAssets="all" prevents copying to output - CS2/BepInEx provides Harmony at runtime -->
+        <PackageReference Include="Lib.Harmony" Version="2.3.3" PrivateAssets="all" />
     </ItemGroup>
 
     <ItemGroup>
