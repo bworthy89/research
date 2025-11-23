@@ -23,7 +23,7 @@ namespace EnhancedGrid.Systems
         {
             if (m_Harmony != null)
             {
-                m_Harmony.UnpatchSelf();
+                m_Harmony.UnpatchAll(m_Harmony.Id);
                 m_Harmony = null;
             }
 
