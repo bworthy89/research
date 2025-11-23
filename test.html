@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Quick Canvas Test</title>
+</head>
+<body style="background: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;">
+    <div style="text-align: center;">
+        <h2 style="color: #4CAF50;">Canvas Test</h2>
+        <canvas id="test" width="800" height="800" style="background: rgba(0,0,0,0.5); border: 2px solid #4CAF50;"></canvas>
+        <p style="color: #fff; margin-top: 20px;">If you see a grid pattern above, the canvas is working!</p>
+    </div>
+    <script>
+        const canvas = document.getElementById('test');
+        const ctx = canvas.getContext('2d');
+
+        // Draw test grid
+        ctx.strokeStyle = '#ff4444';
+        ctx.lineWidth = 4;
+
+        // Vertical lines
+        for (let x = 0; x <= 800; x += 100) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, 800);
+            ctx.stroke();
+        }
+
+        // Horizontal lines
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        for (let y = 0; y <= 800; y += 100) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(800, y);
+            ctx.stroke();
+        }
+
+        console.log('Canvas test successful!');
+    </script>
+</body>
+</html>
