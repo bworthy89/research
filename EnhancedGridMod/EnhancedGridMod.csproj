@@ -33,4 +33,10 @@
         <None Include="$(ModTargetsFile)" Link="Properties\Mod.targets" />
     </ItemGroup>
 
+    <!-- Disable Burst compilation to avoid cache issues -->
+    <PropertyGroup>
+        <BurstCompile>false</BurstCompile>
+        <EnableBurstCompilation>false</EnableBurstCompilation>
+    </PropertyGroup>
+
 </Project>
